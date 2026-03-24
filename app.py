@@ -5,165 +5,140 @@ import numpy as np
 import plotly.graph_objects as go
 from datetime import datetime, timedelta
 
-# 1. 페이지 설정 및 프리미엄 디자인 UI
-st.set_page_config(page_title="EXECUTIVE MARKET MONITOR", layout="wide")
+# 1. 페이지 설정 및 프리미엄 매크로 디자인
+st.set_page_config(page_title="GLOBAL MACRO & MARKET MONITOR", layout="wide")
 
-# 디자이너급 UI/UX 스타일 정의
 st.markdown("""
     <style>
-    [data-testid="stAppViewContainer"] { background-color: #fcfcfc; font-family: 'Inter', sans-serif; }
-    [data-testid="stHeader"] { background-color: rgba(252, 252, 252, 0); }
-    [data-testid="stSidebar"] { background-color: #f8f9fa; border-right: 1px solid #eee; }
-    
-    /* Executive Verdict Card */
-    .verdict-box { padding: 30px; border-radius: 20px; margin-bottom: 30px; border: 1px solid #efefef;}
+    [data-testid="stAppViewContainer"] { background-color: #f8f9fa; font-family: 'Inter', sans-serif; }
+    .macro-card { background-color: #ffffff; padding: 20px; border-radius: 12px; border: 1px solid #eee; box-shadow: 0 4px 6px rgba(0,0,0,0.02); height: 100%; }
+    .macro-label { font-size: 12px; font-weight: 700; color: #888; text-transform: uppercase; letter-spacing: 1px; }
+    .macro-val { font-size: 24px; font-weight: 800; color: #111; margin: 5px 0; }
+    .macro-status { font-size: 13px; font-weight: 600; padding: 4px 8px; border-radius: 6px; display: inline-block; }
+    .status-bad { background-color: #fff5f5; color: #e03131; } /* 주가에 부정적 */
+    .status-good { background-color: #ebfbee; color: #2f9e44; } /* 주가에 긍정적 */
+    .verdict-box { padding: 30px; border-radius: 20px; margin-bottom: 30px; border: 1px solid #e9ecef; }
     .positive-v { background: linear-gradient(135deg, #fff5f5 0%, #ffffff 100%); border-left: 10px solid #ff6b6b; color: #e03131; }
     .neutral-v { background: linear-gradient(135deg, #fff9db 0%, #ffffff 100%); border-left: 10px solid #fab005; color: #f08c00; }
     .negative-v { background: linear-gradient(135deg, #e7f5ff 0%, #ffffff 100%); border-left: 10px solid #228be6; color: #1971c2; }
-    .v-title { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.2px; margin-bottom: 8px; opacity: 0.7;}
-    .v-content { font-size: 34px; font-weight: 800; letter-spacing: -1.2px; line-height: 1.1; }
-    
-    /* Indicator Card */
-    .info-card { background-color: #ffffff; padding: 22px; border-radius: 15px; border: 1px solid #f1f3f5; box-shadow: 0 4px 12px rgba(0,0,0,0.03); height: 100%; }
-    .card-title { font-size: 12px; font-weight: 700; color: #adb5bd; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px; }
-    .card-val { font-size: 26px; font-weight: 700; color: #212529; letter-spacing: -0.5px; }
-    .card-caption { font-size: 13px; color: #868e96; margin-top: 8px; line-height: 1.4; }
-    
-    /* Tabs Customizing */
-    .stTabs [data-baseweb="tab-list"] { gap: 10px; }
-    .stTabs [data-baseweb="tab"] { background-color: #f1f3f5; border-radius: 8px; padding: 8px 20px; color: #495057; font-size: 14px; }
-    .stTabs [data-baseweb="tab"][aria-selected="true"] { background-color: #228be6 !important; color: white !important; font-weight: 600; }
     </style>
     """, unsafe_allow_html=True)
 
-# 2. 데이터 인프라 구축 (에러 수정: G/D 신호 계산 포함)
+# 2. 데이터 엔진 (지수 + 매크로)
 @st.cache_data(ttl=3600)
-def load_full_data(ticker):
+def load_all_market_data(ticker):
+    # 지수 데이터
     df = yf.download(ticker, start="2000-01-01")
-    if isinstance(df.columns, pd.MultiIndex):
-        df.columns = df.columns.get_level_values(0)
-    
-    # 이동평균선
+    if isinstance(df.columns, pd.MultiIndex): df.columns = df.columns.get_level_values(0)
     for m in [5, 20, 60, 120, 240]:
         df[f'MA{m}'] = df['Close'].rolling(window=m).mean()
-    
-    # [에러 해결 부위] 신호 데이터 생성
     df['G'] = (df['MA60'].shift(1) < df['MA120'].shift(1)) & (df['MA60'] > df['MA120'])
     df['D'] = (df['MA60'].shift(1) > df['MA120'].shift(1)) & (df['MA60'] < df['MA120'])
     
-    # RSI & MACD
+    # RSI
     delta = df['Close'].diff()
     gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
     loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
     df['RSI'] = 100 - (100 / (1 + (gain / loss)))
     
-    exp1 = df['Close'].ewm(span=12, adjust=False).mean()
-    exp2 = df['Close'].ewm(span=26, adjust=False).mean()
-    df['MACD'] = exp1 - exp2
-    df['Signal_Line'] = df['MACD'].ewm(span=9, adjust=False).mean()
-    
     return df.dropna(subset=['MA240'])
 
-# --- 사이드바 및 데이터 세팅 ---
-st.sidebar.markdown("### 🏛️ MARKET SELECTION")
-indices = {
-    "NASDAQ (Composite)": "^IXIC", "NASDAQ 100 (Tech)": "^NDX", 
-    "S&P 500 (US Large)": "^GSPC", "KOSPI (Korea)": "^KS11", "KOSDAQ (Korea)": "^KQ11"
-}
+@st.cache_data(ttl=3600)
+def get_macro_data():
+    # 금리(^TNX), 유가(CL=F), 달러(DX-Y.NYB), VIX(^VIX)
+    macros = {"Rate": "^TNX", "Oil": "CL=F", "Dollar": "DX-Y.NYB", "VIX": "^VIX"}
+    results = {}
+    for name, t in macros.items():
+        d = yf.download(t, period="5d")
+        if isinstance(d.columns, pd.MultiIndex): d.columns = d.columns.get_level_values(0)
+        curr = d['Close'].iloc[-1]
+        prev = d['Close'].iloc[-2]
+        change = ((curr - prev) / prev) * 100
+        results[name] = {"val": curr, "change": change}
+    return results
+
+# --- 데이터 로드 ---
+macro_dict = get_macro_data()
+st.sidebar.markdown("### 🏛️ MONITORING ASSETS")
+indices = {"NASDAQ": "^IXIC", "NASDAQ 100": "^NDX", "S&P 500": "^GSPC", "KOSPI": "^KS11", "KOSDAQ": "^KQ11"}
 choice = st.sidebar.radio("Select Benchmark", list(indices.keys()))
-data = load_full_data(indices[choice])
+data = load_all_market_data(indices[choice])
 
-# 실시간 분석 데이터 추출
+# 실시간 분석
 last = data.iloc[-1]
-curr, ma60, ma120 = float(last['Close']), float(last['MA60']), float(last['MA120'])
-rsi, macd, signal = float(last['RSI']), float(last['MACD']), float(last['Signal_Line'])
-disp_120 = (curr / ma120) * 100
+curr, ma60, ma120, rsi = float(last['Close']), float(last['MA60']), float(last['MA120']), float(last['RSI'])
 
-# AI 스코어링 결론 도출
+# --- 1단계: Global Macro Pulse (가장 상단) ---
+st.title("🌐 Global Macro & Market Intelligence")
+m_c1, m_c2, m_c3, m_c4 = st.columns(4)
+
+with m_c1:
+    rate = macro_dict['Rate']
+    status = "BAD (Tech Risk)" if rate['change'] > 0 else "GOOD"
+    st.markdown(f'''<div class="macro-card"><div class="macro-label">US 10Y Yield (금리)</div><div class="macro-val">{rate['val']:.2f}%</div>
+                <div class="macro-status {'status-bad' if status[0]=='B' else 'status-good'}">{status}</div>
+                <div style="font-size:11px; color:#888; margin-top:5px;">금리 상승은 기술주 가치 하락의 원인이 됩니다.</div></div>''', unsafe_allow_html=True)
+with m_c2:
+    oil = macro_dict['Oil']
+    status = "BAD (Inflation)" if oil['val'] > 85 else "STABLE"
+    st.markdown(f'''<div class="macro-card"><div class="macro-label">WTI Oil (유가)</div><div class="macro-val">${oil['val']:.2f}</div>
+                <div class="macro-status {'status-bad' if status[0]=='B' else 'status-good'}">{status}</div>
+                <div style="font-size:11px; color:#888; margin-top:5px;">고유가는 물가 상승과 소비 위축을 초래합니다.</div></div>''', unsafe_allow_html=True)
+with m_c3:
+    dollar = macro_dict['Dollar']
+    status = "BAD (FX Risk)" if dollar['change'] > 0.5 else "STABLE"
+    st.markdown(f'''<div class="macro-card"><div class="macro-label">Dollar Index (달러)</div><div class="macro-val">{dollar['val']:.2f}</div>
+                <div class="macro-status {'status-bad' if status[0]=='B' else 'status-good'}">{status}</div>
+                <div style="font-size:11px; color:#888; margin-top:5px;">강달러는 신흥국 주식 시장의 자금 유출을 부릅니다.</div></div>''', unsafe_allow_html=True)
+with m_c4:
+    vix = macro_dict['VIX']
+    status = "RISK (Fear)" if vix['val'] > 25 else "NORMAL"
+    st.markdown(f'''<div class="macro-card"><div class="macro-label">VIX Index (공포)</div><div class="macro-val">{vix['val']:.2f}</div>
+                <div class="macro-status {'status-bad' if status[0]=='R' else 'status-good'}">{status}</div>
+                <div style="font-size:11px; color:#888; margin-top:5px;">지수가 높을수록 시장의 불안감이 크다는 뜻입니다.</div></div>''', unsafe_allow_html=True)
+
+# --- 2단계: 매크로 결합형 투자 의견 ---
 score = 0
 if ma60 > ma120: score += 2
-else: score -= 2
-if rsi < 38: score += 2
-elif rsi > 62: score -= 2
-if macd > signal: score += 1
-else: score -= 1
+if rsi < 40: score += 2
+elif rsi > 60: score -= 2
+if macro_dict['Rate']['change'] > 1.5: score -= 1 # 금리 급등 시 패널티
 
-if score >= 2: verdict, v_class = "긍정 (적극적 투자 권장)", "positive-v"
-elif score <= -2: verdict, v_class = "부정 (보수적 대응 권장)", "negative-v"
-else: verdict, v_class = "중립 (시장 관망 필요)", "neutral-v"
+if score >= 2: verdict, v_class = "적극적 투자 권장 (매크로 우호)", "positive-v"
+elif score <= -1: verdict, v_class = "보수적 관망 (리스크 관리)", "negative-v"
+else: verdict, v_class = "중립적 접근 (포트폴리오 유지)", "neutral-v"
 
-# --- 메인 대시보드 뷰 ---
-st.title(f"{choice} Executive Intelligence")
+st.markdown(f'<div class="verdict-box {v_class}"><div class="v-title">Executive Verdict</div><div class="v-content">{verdict}</div></div>', unsafe_allow_html=True)
 
-# 1. 최상단 Executive Verdict
-st.markdown(f'''
-    <div class="verdict-box {v_class}">
-        <div class="v-title">Investment Verdict for Today</div>
-        <div class="v-content">{verdict}</div>
-    </div>
-''', unsafe_allow_html=True)
+# --- 3단계: 지수 상세 분석 (이전 핵심 로직 유지) ---
+st.subheader(f"📊 {choice} Technical Analysis")
+t1, t2, t3 = st.columns(3)
+with t1: st.info(f"**이평선 배열:** {'상승 정배열' if ma60 > ma120 else '하락 역배열'}")
+with t2: st.info(f"**이격률(120일):** {(curr/ma120*100):.1f}% (평균 회귀 확인)")
+with t3: st.info(f"**RSI 지표:** {rsi:.1f} ({'과열' if rsi > 70 else ('바닥' if rsi < 30 else '안정')})")
 
-# 2. 핵심 요약 카드 4종
-c1, c2, c3, c4 = st.columns(4)
-with c1:
-    st.markdown(f'<div class="info-card"><div class="card-title">Trend Status</div><div class="card-val">{"Bullish" if ma60 > ma120 else "Bearish"}</div><div class="card-caption">60/120 이평선 정배열 여부</div></div>', unsafe_allow_html=True)
-with c2:
-    energy_gap = abs(ma60 - ma120) / ma120 * 100
-    st.markdown(f'<div class="info-card"><div class="card-title">Market Energy</div><div class="card-val">{"Converged" if energy_gap < 2.5 else "Diverged"}</div><div class="card-caption">이평선 수렴을 통한 변동성 진단</div></div>', unsafe_allow_html=True)
-with c3:
-    st.markdown(f'<div class="info-card"><div class="card-title">Sentiment (RSI)</div><div class="card-val">{rsi:.1f}</div><div class="card-caption">시장 과열 및 바닥권 진단</div></div>', unsafe_allow_html=True)
-with c4:
-    st.markdown(f'<div class="info-card"><div class="card-title">Mean Reversion</div><div class="card-val">{disp_120:.1f}%</div><div class="card-caption">120일 평균선 대비 이격률</div></div>', unsafe_allow_html=True)
-
-# 3. 성과 분석 및 차트
-st.markdown("---")
-st.subheader("📊 Performance Analysis & Interactive Chart")
-tabs = st.tabs(["3개월", "6개월", "1년", "3년", "전체"])
-
-def render_analysis(df_sub, p_name):
-    # 성과 지표 산출
-    s_p, e_p = float(df_sub['Close'].iloc[0]), float(df_sub['Close'].iloc[-1])
-    ret = ((e_p - s_p) / s_p) * 100
-    days = (df_sub.index[-1] - df_sub.index[0]).days
-    cagr = (((e_p / s_p) ** (365 / days)) - 1) * 100 if days > 0 else 0
-    
-    m_col1, m_col2 = st.columns(2)
-    m_col1.metric(f"{p_name} 실질 수익률", f"{ret:.2f}%")
-    m_col2.metric(f"{p_name} 연평균 성장률(CAGR)", f"{cagr:.2f}%")
-
-    # 전문가용 클린 차트
+tabs = st.tabs(["1년 흐름", "3년 흐름", "전체 및 10년 예측"])
+def render_chart(df_plot):
     fig = go.Figure()
-    fig.add_trace(go.Candlestick(x=df_sub.index, open=df_sub['Open'], high=df_sub['High'], 
-                                 low=df_sub['Low'], close=df_sub['Close'], name="Price", opacity=0.4))
-    
-    for d, c in {60:'#5c7cfa', 120:'#228be6', 240:'#868e96'}.items():
-        if f'MA{d}' in df_sub.columns:
-            fig.add_trace(go.Scatter(x=df_sub.index, y=df_sub[f'MA{d}'], name=f'{d}MA', line=dict(color=c, width=2 if d != 240 else 1.2)))
-    
-    # 골든/데드 마커 표시
-    cross_data = data.loc[df_sub.index[0]:df_sub.index[-1]]
-    gs, ds = cross_data[cross_data['G']], cross_data[cross_data['D']]
-    fig.add_trace(go.Scatter(x=gs.index, y=gs['MA60'], mode='markers', marker=dict(symbol='triangle-up', size=12, color='#fa5252'), name='Golden'))
-    fig.add_trace(go.Scatter(x=ds.index, y=ds['MA60'], mode='markers', marker=dict(symbol='triangle-down', size=12, color='#1c7ed6'), name='Death'))
-    
-    fig.update_layout(height=550, template="plotly_white", xaxis_rangeslider_visible=False, dragmode='pan', margin=dict(l=0, r=0, t=10, b=10))
-    st.plotly_chart(fig, use_container_width=True, config={'scrollZoom': True, 'displayModeBar': False})
+    fig.add_trace(go.Candlestick(x=df_plot.index, open=df_plot['Open'], high=df_plot['High'], low=df_plot['Low'], close=df_plot['Close'], name="Price", opacity=0.4))
+    for d, c in {60:'#2f9e44', 120:'#1971c2', 240:'#495057'}.items():
+        fig.add_trace(go.Scatter(x=df_plot.index, y=df_plot[f'MA{d}'], name=f'{d}MA', line=dict(color=c, width=2)))
+    fig.update_layout(height=500, template="plotly_white", xaxis_rangeslider_visible=False, dragmode='pan', margin=dict(l=0, r=0, t=0, b=0))
+    st.plotly_chart(fig, use_container_width=True, config={'scrollZoom': True})
 
-with tabs[0]: render_analysis(data.iloc[-60:], "3개월")
-with tabs[1]: render_analysis(data.iloc[-125:], "6개월")
-with tabs[2]: render_analysis(data.iloc[-250:], "1년")
-with tabs[3]: render_analysis(data.iloc[-750:], "3년")
-with tabs[4]: render_analysis(data, "전체")
+with tabs[0]: render_chart(data.iloc[-250:])
+with tabs[1]: render_chart(data.iloc[-750:])
+with tabs[2]: render_chart(data)
 
-# 4. 하단 가이드라인 (Footnotes)
-st.markdown("""
-    <div style="background-color: #1a1b1e; padding: 30px; border-radius: 15px; color: #ced4da; margin-top: 40px;">
-        <h4 style="color: white; margin-bottom: 20px;">💡 Investment Reference Guidelines</h4>
-        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px;">
-            <div><b style="color: #fab005;">Mean Reversion</b><br><span style="font-size: 13px; opacity: 0.8;">주가는 120일선 이격률 115% 이상 시 하락 가능성, 85% 이하 시 반등 가능성이 높습니다.</span></div>
-            <div><b style="color: white;">Trend Analysis</b><br><span style="font-size: 13px; opacity: 0.8;">60일선이 120일선 위에 있는 정배열 상태에서만 매수 우위 전략을 유지합니다.</span></div>
-            <div><b style="color: #fab005;">Energy Convergence</b><br><span style="font-size: 13px; opacity: 0.8;">이평선 수렴 이후에는 거대 변동성이 발생합니다. RSI 지표와 함께 방향성을 예측합니다.</span></div>
-            <div><b style="color: white;">Reverse Cross</b><br><span style="font-size: 13px; opacity: 0.8;">골든크로스 시점에 이격률이 높다면 오히려 단기 고점으로 판단하는 역발상이 필요합니다.</span></div>
-        </div>
-    </div>
-""", unsafe_allow_html=True)
+# --- 4단계: 초보자를 위한 매크로 가이드북 (최하단) ---
+st.markdown("---")
+st.subheader("💡 초보 투자자를 위한 매크로-주식 연결고리")
+g1, g2, g3, g4 = st.columns(4)
+with g1:
+    st.markdown("### 🏦 금리와 주가\n금리는 '돈의 값어치'입니다. 금리가 오르면 기업이 돈 빌리는 비용이 비싸져 이익이 줄고, 주가는 하락 압력을 받습니다.")
+with g2:
+    st.markdown("### 🛢️ 유가와 물가\n유가는 '물가의 기초'입니다. 유가가 너무 오르면 물가(인플레이션)가 올라 연준이 금리를 더 올릴 가능성이 높아집니다.")
+with g3:
+    st.markdown("### 💵 달러와 환율\n달러가 강해지면 외국인 투자자들이 한국 주식을 팔고 달러로 바꿔 나가려 하기 때문에 한국 증시엔 악재입니다.")
+with g4:
+    st.markdown("### 📉 VIX와 심리\n'공포 지수'라고 불립니다. 시장이 불안할 때 치솟으며, 가끔 VIX가 너무 높을 때가 역발상 매수 기회가 되기도 합니다.")
