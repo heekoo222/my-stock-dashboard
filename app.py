@@ -5,37 +5,71 @@ import numpy as np
 import plotly.graph_objects as go
 from datetime import datetime, timedelta
 
-# 1. 페이지 설정 및 디자인
-st.set_page_config(page_title="주요 지수 Monitoring", layout="wide")
+# 1. 페이지 설정 및 디자이너급 CSS 주입
+st.set_page_config(page_title="GLOBAL MARKETS MONITOR", layout="wide")
+
+# 디자이너가 만진 듯한 UI/UX 스타일 정의 (Bloomberg/Toss Security 감성)
 st.markdown("""
     <style>
-    .verdict-box { padding: 25px; border-radius: 15px; text-align: center; margin-bottom: 25px; color: white; font-weight: bold; font-size: 32px; }
-    .positive { background-color: #ff4b4b; } /* 상승/긍정: 빨강 */
-    .neutral { background-color: #ffa500; } /* 중립: 주황 */
-    .negative { background-color: #1c83e1; } /* 하락/부정: 파랑 */
-    .insight-card { background-color: #f8f9fa; padding: 20px; border-radius: 10px; border-left: 5px solid #333; height: 100%; }
+    /* 전체 배경색 및 폰트 설정 */
+    [data-testid="stAppViewContainer"] { background-color: #fcfcfc; font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+    [data-testid="stHeader"] { background-color: rgba(252, 252, 252, 0); }
+    [data-testid="stSidebar"] { background-color: #f1f3f5; border-right: 1px solid #e9ecef; }
+    
+    /* 타이틀 및 서브타이틀 스타일 */
+    h1 { color: #111111; font-weight: 800; letter-spacing: -1px; margin-bottom: 0px; }
+    h3 { color: #333333; font-weight: 700; margin-top: 25px; margin-bottom: 15px; }
+    
+    /* 최종 결론 (Verdict) Card 스타일 - 있어보이는 핵심 */
+    .verdict-box { padding: 30px; border-radius: 20px; text-align: left; margin-bottom: 30px; border: 1px solid #e9ecef;}
+    .positive-v { background: linear-gradient(135deg, #fcedeb 0%, #fff6f5 100%); border-left: 10px solid #ff6b6b; color: #e03131; } /* 상승/긍정 */
+    .neutral-v { background: linear-gradient(135deg, #fff9db 0%, #fffef5 100%); border-left: 10px solid #fab005; color: #f08c00; } /* 중립 */
+    .negative-v { background: linear-gradient(135deg, #e7f5ff 0%, #f3faff 100%); border-left: 10px solid #228be6; color: #1971c2; } /* 하락/부정 */
+    .v-title { font-size: 14px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 5px; opacity: 0.8;}
+    .v-content { font-size: 36px; font-weight: 800; letter-spacing: -1.5px; line-height: 1.1; }
+    
+    /* 일반 정보 Card 스타일 */
+    .info-card { background-color: #ffffff; padding: 25px; border-radius: 15px; border: 1px solid #e9ecef; box-shadow: 0 4px 6px rgba(0,0,0,0.02); height: 100%; }
+    .card-title { font-size: 14px; font-weight: 600; color: #868e96; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px; }
+    .card-val { font-size: 28px; font-weight: 700; color: #111111; letter-spacing: -1px; }
+    .card-caption { font-size: 13px; color: #868e96; margin-top: 10px; line-height: 1.4; }
+    
+    /* 메트릭 스타일 재정의 (초보자용 지표) */
+    [data-testid="stMetricValue"] { font-size: 32px !important; font-weight: 700 !important; color: #111111 !important; letter-spacing: -1.5px !important; }
+    [data-testid="stMetricLabel"] { font-size: 14px !important; color: #868e96 !important; font-weight: 600 !important; text-transform: uppercase !important; letter-spacing: 1px !important; }
+    [data-testid="stMetricDelta"] { font-size: 15px !important; }
+
+    /* 탭 스타일 */
+    .stTabs [data-baseweb="tab-list"] { gap: 10px; }
+    .stTabs [data-baseweb="tab"] { background-color: #f1f3f5; border-radius: 10px; padding: 8px 16px; color: #495057; }
+    .stTabs [data-baseweb="tab"][aria-selected="true"] { background-color: #228be6 !important; color: white !important; font-weight: 600; }
+    
+    /* 가이드북 하단 바 스타일 */
+    .guide-box { background-color: #111111; padding: 25px; border-radius: 15px; color: #f8f9fa; margin-top: 40px;}
+    .guide-box h4 { color: #f8f9fa !important; font-weight: 700; }
+    .guide-box .info-col { border-left: 1px solid #333; padding-left: 20px;}
     </style>
     """, unsafe_allow_html=True)
 
-# 2. 데이터 수집 및 지표 계산 함수
-@st.cache_data
+# 2. 데이터 수집 및 지표 계산 함수 ( Bloomberg 급 데이터 인프라)
+@st.cache_data(ttl=3600) # 1시간 캐시
 def load_full_data(ticker):
     df = yf.download(ticker, start="2000-01-01")
     if isinstance(df.columns, pd.MultiIndex):
         df.columns = df.columns.get_level_values(0)
     
-    # 이평선
+    # 주요 이평선
     for m in [5, 20, 60, 120, 240]:
         df[f'MA{m}'] = df['Close'].rolling(window=m).mean()
     
-    # RSI (상대강도지수) 계산
+    # RSI (심리 과열도)
     delta = df['Close'].diff()
     gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
     loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
     rs = gain / loss
     df['RSI'] = 100 - (100 / (1 + rs))
     
-    # MACD 계산
+    # MACD (추세 에너지)
     exp1 = df['Close'].ewm(span=12, adjust=False).mean()
     exp2 = df['Close'].ewm(span=26, adjust=False).mean()
     df['MACD'] = exp1 - exp2
@@ -43,128 +77,176 @@ def load_full_data(ticker):
     
     return df.dropna(subset=['MA240'])
 
-# --- 사이드바 ---
-st.sidebar.title("🧭 모니터링 설정")
-indices = {"NASDAQ": "^IXIC", "NASDAQ 100": "^NDX", "S&P 500": "^GSPC", "KOSPI": "^KS11", "KOSDAQ": "^KQ11"}
-choice = st.sidebar.radio("지수 선택", list(indices.keys()))
+# --- 사이드바: 설정 영역 ---
+st.sidebar.markdown("# ⚙️ Dashboard <br>Intelligence Config", unsafe_allow_html=True)
+indices = {
+    "NASDAQ (종합 기술)": "^IXIC", 
+    "NASDAQ 100 (핵심 기술)": "^NDX", 
+    "S&P 500 (시장 전체)": "^GSPC", 
+    "KOSPI (한국 코스피)": "^KS11", 
+    "KOSDAQ (한국 코스닥)": "^KQ11"
+}
+choice = st.sidebar.radio("모니터링 대상 지수", list(indices.keys()))
 data = load_full_data(indices[choice])
 
-# --- 데이터 분석 로직 ---
+# --- 데이터 분석 및 스코어링 로직 ---
 last = data.iloc[-1]
 curr = float(last['Close'])
 ma60, ma120 = float(last['MA60']), float(last['MA120'])
-rsi = float(last['RSI'])
-macd = float(last['MACD'])
-signal = float(last['Signal_Line'])
+rsi, macd, signal = float(last['RSI']), float(last['MACD']), float(last['Signal_Line'])
 
-# [요청 1] 60일/120일 기준 정배열/역배열
+# 분석 지표들
 is_60_120_bull = ma60 > ma120
-arrangement = "정배열(상승)" if is_60_120_bull else "역배열(하락)"
-
-# [요청 2] 에너지 수렴/발산
 energy_gap = abs(ma60 - ma120) / ma120 * 100
-energy_status = "수렴(에너지 응축)" if energy_gap < 3 else "발산(추세 진행)"
-
-# [요청 3] 이격률
-disp_60 = (curr / ma60) * 100
 disp_120 = (curr / ma120) * 100
 
-# [추가] 투자 의사결정 스코어링 로직
+# 최종 의사결정 점수 (Score) - 보스용 고급 알고리즘
 score = 0
-if is_60_120_bull: score += 2  # 추세가 살아있음
+if is_60_120_bull: score += 2 # 추세 상승
 else: score -= 2
-if rsi < 30: score += 2        # 과매도 (기회)
-elif rsi > 70: score -= 2      # 과열 (위험)
-if macd > signal: score += 1   # 추세 관성 상승
+if rsi < 38: score += 2 # 저평가 기회
+elif rsi > 62: score -= 2 # 과평가 위험
+if macd > signal: score += 1 # 상승 모멘텀
 else: score -= 1
-if disp_120 < 95: score += 1   # 역사적 저평가
+if disp_120 < 97: score += 1 # 평균 회귀 매수
 
-# 최종 결과값 도출
-if score >= 2:
-    verdict, v_class = "긍정 (BUY / HOLD)", "positive"
-elif score <= -2:
-    verdict, v_class = "부정 (SELL / WAIT)", "negative"
-else:
-    verdict, v_class = "중립 (NEUTRAL)", "neutral"
+# 스코어에 따른 최종 결론 및 색상 클래스
+if score >= 2: verdict, v_class = "긍정 (적극적 투자 권장)", "positive-v"
+elif score <= -2: verdict, v_class = "부정 (보수적 대응/현금화)", "negative-v"
+else: verdict, v_class = "중립 (신중한 관망)", "neutral-v"
 
-# --- 메인 화면: 최상단 최종 결과 ---
-st.title(f"📊 {choice} Monitoring & Decision")
-st.markdown(f'<div class="verdict-box {v_class}">오늘의 투자 의견: {verdict}</div>', unsafe_allow_html=True)
+# --- 메인 화면: 보스용 최상단 Executive Summary ---
+st.title(f"{choice} Intelligence Report")
+# Bloomberg 급 최종 결론 카드
+st.markdown(f'''
+    <div class="verdict-box {v_class}">
+        <div class="v-title">오늘의 시장 투자 의견</div>
+        <div class="v-content">{verdict}</div>
+    </div>
+''', unsafe_allow_html=True)
 
-# --- 중단: 60/120 집중 인사이트 ---
-st.subheader("🔍 60일 & 120일 이평선 핵심 진단")
-c1, c2, c3 = st.columns(3)
-with c1:
-    st.write("📊 **배열 상태**")
-    st.write(f"현재: **{arrangement}**")
-    st.caption("60일선이 120일선 위에 있으면 정배열(상승)입니다.")
-with c2:
-    st.write("🧨 **에너지 상태**")
-    st.write(f"현재: **{energy_status}**")
-    st.caption("두 선의 간격이 좁을수록 큰 변동성이 임박했음을 뜻합니다.")
-with c3:
-    st.write("🏠 **이격률 (120일선 기준)**")
-    st.write(f"수치: **{disp_120:.1f}%**")
-    st.caption("100%보다 너무 높으면 고점, 너무 낮으면 저점입니다.")
+# --- 중단: 60/120 핵심 진단 & 보조 지표 (Card UI) ---
+st.subheader("🔍 Key Strategic Indicators (60/120 MA focus)")
+d_c1, d_c2, d_c3, d_c4 = st.columns(4)
 
-# --- 중단: 보조 지표 및 인사이트 ---
+with d_c1:
+    st.markdown(f'''
+        <div class="info-card">
+            <div class="card-title">중장기 추세 상태</div>
+            <div class="card-val">{'상승 흐름' if is_60_120_bull else '하락 흐름'}</div>
+            <div class="card-caption">60일선(수급)이 120일선(경기) 위에 위치합니다.</div>
+        </div>
+    ''', unsafe_allow_html=True)
+with d_c2:
+    st.markdown(f'''
+        <div class="info-card">
+            <div class="card-title">시장 에너지</div>
+            <div class="card-val">{'응축 (폭발전야)' if energy_gap < 2.5 else '진행 (추세지속)'}</div>
+            <div class="card-caption">두 선의 간격이 좁을수록 큰 변동성이 곧 발생합니다.</div>
+        </div>
+    ''', unsafe_allow_html=True)
+with d_c3:
+    st.markdown(f'''
+        <div class="info-card">
+            <div class="card-title">심리 과열도 (RSI)</div>
+            <div class="card-val">{rsi:.1f}</div>
+            <div class="card-caption">{'조정 주의 (과열)' if rsi > 70 else ('매수 기회 (바닥)' if rsi < 30 else '정상 범위')} 구간입니다.</div>
+        </div>
+    ''', unsafe_allow_html=True)
+with d_c4:
+    st.markdown(f'''
+        <div class="info-card">
+            <div class="card-title">평균 회귀 이격률</div>
+            <div class="card-val">{disp_120:.1f}%</div>
+            <div class="card-caption">120일 평균 가격(집) 대비 현재 위치입니다.</div>
+        </div>
+    ''', unsafe_allow_html=True)
+
+# --- 차트 및 성과 영역: 보스가 가장 오래 볼 영역 (UX 고도화) ---
 st.markdown("---")
-st.subheader("💡 투자 의사결정을 위한 추가 지표")
-i1, i2, i3 = st.columns(3)
-with i1:
-    st.markdown(f'<div class="insight-card"><b>🔥 RSI (심리 과열도)</b><br><br>현재 수치: {rsi:.1f}<br><br>'
-                f'{"⚠️ 과열 구간입니다. 매수 자제." if rsi > 70 else ("💎 바닥 구간입니다. 매수 검토." if rsi < 30 else "✅ 심리가 안정적입니다.")}'
-                f'</div>', unsafe_allow_html=True)
-with i2:
-    st.markdown(f'<div class="insight-card"><b>📈 MACD (추세 에너지)</b><br><br>방향: {"상승 관성" if macd > signal else "하락 관성"}<br><br>'
-                f'MACD가 시그널 선 위에 있으면 상승하려는 힘이 더 강함을 의미합니다.</div>', unsafe_allow_html=True)
-with i3:
-    # 52주 최고/최저 대비 위치
-    high_52 = data['High'].iloc[-250:].max()
-    pos_52 = (curr / high_52) * 100
-    st.markdown(f'<div class="insight-card"><b>🏆 52주 최고점 대비 위치</b><br><br>현재 위치: {pos_52:.1f}%<br><br>'
-                f'고점 대비 {100-pos_52:.1f}% 하락한 상태입니다. 역사적 고점 대비 부담을 체크하세요.</div>', unsafe_allow_html=True)
+st.subheader("📅 Historical Performance & Chart Analysis")
+tabs = st.tabs(["3개월", "6개월", "1년", "3년", "전체"])
 
-# --- 차트 영역 ---
-st.markdown("---")
-tab1, tab2 = st.tabs(["주가 차트 분석", "장기 추세 & 예측"])
+# 성과 지표 및 차트 그리기 함수 (전문가용 클린 차트)
+def display_analysis_tab(df_subset, period_name, show_predictions=False):
+    # 수익률 및 성과 지표 계산
+    s_p = float(df_subset['Close'].iloc[0])
+    e_p = float(df_subset['Close'].iloc[-1])
+    ret = ((e_p - s_p) / s_p) * 100
+    days = (df_subset.index[-1] - df_subset.index[0]).days
+    cagr = (((e_p / s_p) ** (365 / days)) - 1) * 100 if days > 0 else 0
+    
+    # [가장 중요한 성과 지표] 차트 바로 위에 크게 배치
+    r1, r2 = st.columns(2)
+    # tosssec 스타일 클린 메트릭
+    r1.metric(f"{period_name} 기간 실질 수익률", f"{ret:.2f}%")
+    r2.metric(f"{period_name} 연평균 성장률(CAGR)", f"{cagr:.2f}%")
 
-def draw_main_chart(df_plot):
+    # 전문가용 클린 차트 디자인 (Plotly Dark Style을 White에 이식)
     fig = go.Figure()
-    fig.add_trace(go.Candlestick(x=df_plot.index, open=df_plot['Open'], high=df_plot['High'], low=df_plot['Low'], close=df_plot['Close'], name="Price", opacity=0.4))
-    # 60일, 120일 강조
-    fig.add_trace(go.Scatter(x=df_plot.index, y=df_plot['MA60'], name='60일선', line=dict(color='green', width=2)))
-    fig.add_trace(go.Scatter(x=df_plot.index, y=df_plot['MA120'], name='120일선', line=dict(color='blue', width=2)))
-    fig.add_trace(go.Scatter(x=df_plot.index, y=df_plot['MA240'], name='240일선(경기)', line=dict(color='black', width=1, dash='dot')))
+    # 캔들
+    fig.add_trace(go.Candlestick(x=df_subset.index, open=df_subset['Open'], high=df_subset['High'], 
+                                 low=df_subset['Low'], close=df_subset['Close'], name="주가", opacity=0.4))
+    # 이평선 색상 간결화 및 60/120 강조
+    ma_colors = {60:'#5c7cfa', 120:'#228be6', 240:'#adb5bd'} # 블루 팔레트 & 블랙/그레이
+    for d, c in ma_colors.items():
+        if f'MA{d}' in df_subset.columns:
+            fig.add_trace(go.Scatter(x=df_subset.index, y=df_subset[f'MA{d}'], name=f'{d}일선', line=dict(color=c, width=2 if d != 240 else 1.2)))
     
-    fig.update_layout(height=600, template="plotly_white", xaxis_rangeslider_visible=False, dragmode='pan')
-    st.plotly_chart(fig, use_container_width=True, config={'scrollZoom': True})
-
-with tab1:
-    period = st.radio("기간 선택", ["3개월", "6개월", "1년", "3년"], horizontal=True)
-    days = {"3개월":60, "6개월":125, "1년":250, "3년":750}
-    draw_main_chart(data.iloc[-days[period]:])
-
-with tab2:
-    # 10년 예측선 포함
-    last_d, last_v = data.index[-1], float(last['MA240'])
-    slope = (data['MA240'].iloc[-1] - data['MA240'].iloc[-500]) / 500
-    f_dates = [last_d + timedelta(days=i) for i in range(1, 3650)]
-    f_prices = [last_v + (slope * i) for i in range(1, 3650)]
+    # 골든/데드 크로스 (사용자 가이드 기반: 60vs120)
+    # 기존 코드에서 df['G']가 전체 데이터 기준이라, subset에서 G/D 컬럼을 가져와야 함. 
+    # load_full_data에서 전체 데이터 df를 반환하므로 tabs의 slicing을 이용.
+    df_for_cross = data.loc[df_subset.index[0]:df_subset.index[-1]]
+    gs = df_for_cross[df_for_cross['G']]
+    ds = df_for_cross[df_for_cross['D']]
     
-    fig_long = go.Figure()
-    fig_long.add_trace(go.Scatter(x=data.index, y=data['Close'], name="과거 지수", line=dict(color='lightgray')))
-    fig_long.add_trace(go.Scatter(x=f_dates, y=f_prices, name="향후 10년 추세 예측", line=dict(color='red', dash='dash')))
-    fig_long.update_layout(height=500, template="plotly_white")
-    st.plotly_chart(fig_long, use_container_width=True)
+    # 코랄 레드/스틸 블루 마커
+    fig.add_trace(go.Scatter(x=gs.index, y=gs['MA60'], mode='markers', marker=dict(symbol='triangle-up', size=12, color='#e03131'), name='Golden(60/120)'))
+    fig.add_trace(go.Scatter(x=ds.index, y=ds['MA60'], mode='markers', marker=dict(symbol='triangle-down', size=12, color='#1971c2'), name='Death(60/120)'))
+    
+    # 디자이너급 차트 레이아웃
+    fig.update_layout(
+        height=550, 
+        template="plotly_white", # 배경색 대시보드와 통일
+        xaxis_rangeslider_visible=False, 
+        dragmode='pan', 
+        hovermode='x unified', # 전문가용 툴팁
+        margin=dict(l=10, r=10, t=10, b=10),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+    )
+    # 스크롤 줌 config 최적화
+    st.plotly_chart(fig, use_container_width=True, config={'scrollZoom': True, 'displayModeBar': False})
 
-# --- 최하단: 투자 가이드북 ---
-st.markdown("---")
-st.subheader("📖 자산제곱 AI 투자 가이드북")
-g1, g2, g3 = st.columns(3)
-with g1:
-    st.info("**1. 60/120 골든크로스의 역발상:** 60일선이 120일선을 뚫는 골든크로스는 강력한 매수 신호지만, 이미 선반영된 경우 단기 고점일 수 있으니 이격률을 반드시 체크하세요.")
-with g2:
-    st.info("**2. 에너지 수렴의 폭발력:** 60일선과 120일선이 만나는 수렴 구간 이후에는 위든 아래든 거대한 파동이 옵니다. 이때 RSI가 낮다면 상방 폭발 가능성이 큽니다.")
-with g3:
-    st.info("**3. 120일선 이격률의 의미:** 120일선(반기 평균)에서 주가가 15% 이상 멀어지면, 시장은 '과하다'고 판단하고 다시 평균으로 돌아오려는 회귀 본능이 작동합니다.")
+with tabs[0]: display_analysis_tab(data.iloc[-60:], "3개월")
+with tabs[1]: display_analysis_tab(data.iloc[-125:], "6개월")
+with tabs[2]: display_analysis_tab(data.iloc[-250:], "1년")
+with tabs[3]: display_analysis_tab(data.iloc[-750:], "3년")
+with tabs[4]: display_analysis_tab(data, "전체")
+
+# --- 최하단: 투자 가이드북 (Executive Footnotes 스타일) ---
+# 기존의 밝은 가이드 박스를 블랙 배경으로 바꾸어 화면 마지막의 무게감을 줌
+st.markdown("""
+    <div class="guide-box">
+        <h4>📖 Executive Intelligence Reference</h4>
+        <div style="margin-top:20px;">
+            <div style="display:flex; justify-content: space-between;">
+                <div class="info-col">
+                    <div style="font-weight:600; color:# fab005;">1. 평균 회귀 원칙</div>
+                    <div style="font-size:13px; opacity:0.7;">주가는 120일선에서 너무 멀어지면 결국 자석처럼 다시 돌아옵니다. 이격률이 115% 이상이면 하락을, 85% 이하면 상승을 준비하세요.</div>
+                </div>
+                <div class="info-col">
+                    <div style="font-weight:600; color:# ffffff;">2. 추세 판독기</div>
+                    <div style="font-size:13px; opacity:0.7;">60일선이 120일선 위에 있는 정배열 상태에서 주가가 이평선 근처까지 눌릴 때가 가장 안전한 매수 타이밍입니다.</div>
+                </div>
+                <div class="info-col">
+                    <div style="font-weight:600; color:# fab005;">3. 에너지 수렴</div>
+                    <div style="font-size:13px; opacity:0.7;">60/120일선이 만나는 수렴 구간 이후에는 거대한 추세 변화가 옵니다. 이때 RSI가 낮다면 상방 돌파 가능성이 큽니다.</div>
+                </div>
+                <div class="info-col">
+                    <div style="font-weight:600; color:# ffffff;">4. 역발상 크로스</div>
+                    <div style="font-size:13px; opacity:0.7;">골든크로스가 발생했을 때 이미 주가가 너무 올랐다면(이격률 높음), 오히려 단기 고점일 확률이 높으니 주의하세요.</div>
+                </div>
+            </div>
+        </div>
+    </div>
+""", unsafe_allow_html=True)
