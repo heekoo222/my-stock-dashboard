@@ -5,32 +5,45 @@ import numpy as np
 import plotly.graph_objects as go
 from datetime import datetime, timedelta
 
-# 1. 페이지 설정 및 프리미엄 스타일 (Executive & Beginner Friendly)
-st.set_page_config(page_title="STRATEGIC MARKET INTELLIGENCE 2026", layout="wide")
+# 1. 페이지 설정 및 프리미엄 스타일 시트 (Executive & Human-Centric UI)
+st.set_page_config(page_title="GLOBAL STRATEGIC DASHBOARD 2026", layout="wide")
 
-st.markdown("""
+# 오늘 날짜 가져오기
+today_str = datetime.now().strftime("%Y-%m-%d")
+
+st.markdown(f"""
     <style>
-    [data-testid="stAppViewContainer"] { background-color: #fcfcfc; font-family: 'Inter', sans-serif; }
-    .verdict-box { padding: 30px; border-radius: 20px; margin-bottom: 30px; border: 1px solid #efefef;}
-    .positive-v { background: linear-gradient(135deg, #fff5f5 0%, #ffffff 100%); border-left: 10px solid #ff6b6b; color: #e03131; }
-    .neutral-v { background: linear-gradient(135deg, #fff9db 0%, #ffffff 100%); border-left: 10px solid #fab005; color: #f08c00; }
-    .negative-v { background: linear-gradient(135deg, #e7f5ff 0%, #ffffff 100%); border-left: 10px solid #228be6; color: #1971c2; }
-    .v-content { font-size: 34px; font-weight: 800; letter-spacing: -1.2px; line-height: 1.1; }
+    /* 전체 배경 및 폰트 */
+    [data-testid="stAppViewContainer"] {{ background-color: #fcfcfc; font-family: 'Inter', -apple-system, sans-serif; }}
     
-    .info-card { background-color: #ffffff; padding: 22px; border-radius: 15px; border: 1px solid #f1f3f5; box-shadow: 0 4px 12px rgba(0,0,0,0.03); height: 100%; }
-    .card-title { font-size: 13px; font-weight: 700; color: #adb5bd; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px; }
-    .card-val { font-size: 26px; font-weight: 700; color: #212529; letter-spacing: -0.5px; }
-    .card-analysis { font-size: 13px; color: #495057; margin-top: 10px; line-height: 1.5; padding: 10px; background: #f8f9fa; border-radius: 8px; }
+    /* 우측 상단 날짜 배지 */
+    .date-badge {{
+        position: absolute; top: -50px; right: 10px;
+        background-color: #f1f3f5; padding: 5px 15px; border-radius: 20px;
+        font-size: 14px; font-weight: 600; color: #495057; border: 1px solid #dee2e6;
+    }}
 
-    .macro-section { background-color: #1a1c1e; padding: 40px; border-radius: 25px; margin-top: 50px; color: white; }
-    .situation-box { background-color: rgba(255,255,255,0.07); padding: 15px; border-radius: 10px; border-left: 4px solid #fab005; font-size: 13px; margin-top: 10px; line-height: 1.6; color: #ced4da; }
-    .buffett-appendix { background-color: rgba(255,255,255,0.1); padding: 25px; border-radius: 15px; border: 1px solid rgba(255,255,255,0.1); margin-bottom: 30px;}
+    /* 최종 투자 의견 (Verdict) 디자인 */
+    .verdict-box {{ padding: 30px; border-radius: 20px; margin-bottom: 30px; border: 1px solid #efefef; position: relative; }}
+    .positive-v {{ background: linear-gradient(135deg, #fff5f5 0%, #ffffff 100%); border-left: 10px solid #ff6b6b; color: #e03131; }}
+    .neutral-v {{ background: linear-gradient(135deg, #fff9db 0%, #ffffff 100%); border-left: 10px solid #fab005; color: #f08c00; }}
+    .negative-v {{ background: linear-gradient(135deg, #e7f5ff 0%, #ffffff 100%); border-left: 10px solid #228be6; color: #1971c2; }}
+    .v-content {{ font-size: 34px; font-weight: 800; letter-spacing: -1.2px; line-height: 1.1; }}
     
-    .master-guide { background-color: #e7f5ff; padding: 25px; border-radius: 15px; border: 1px solid #74c0fc; margin-top: 30px; }
+    /* 정보 카드 UI */
+    .info-card {{ background-color: #ffffff; padding: 22px; border-radius: 15px; border: 1px solid #f1f3f5; box-shadow: 0 4px 12px rgba(0,0,0,0.03); height: 100%; }}
+    .card-title {{ font-size: 13px; font-weight: 700; color: #adb5bd; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px; }}
+    .card-val {{ font-size: 26px; font-weight: 700; color: #212529; letter-spacing: -0.5px; }}
+    .card-analysis {{ font-size: 13px; color: #495057; margin-top: 10px; line-height: 1.5; padding: 10px; background: #f8f9fa; border-radius: 8px; }}
+
+    /* 부록 및 가이드 섹션 */
+    .macro-section {{ background-color: #1a1c1e; padding: 40px; border-radius: 25px; margin-top: 50px; color: white; }}
+    .situation-box {{ background-color: rgba(255,255,255,0.07); padding: 15px; border-radius: 10px; border-left: 4px solid #fab005; font-size: 13px; margin-top: 10px; line-height: 1.6; color: #ced4da; }}
+    .buffett-appendix {{ background-color: rgba(255,255,255,0.1); padding: 25px; border-radius: 15px; border: 1px solid rgba(255,255,255,0.1); margin-bottom: 30px;}}
     </style>
     """, unsafe_allow_html=True)
 
-# 2. 데이터 엔진
+# 2. 데이터 사이언스 엔진
 @st.cache_data(ttl=3600)
 def load_all_market_intelligence(ticker):
     df = yf.download(ticker, start="2000-01-01")
@@ -44,6 +57,7 @@ def load_all_market_intelligence(ticker):
     loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
     df['RSI'] = 100 - (100 / (1 + (gain / loss)))
     
+    # 매크로/부록 데이터
     macros = {"US_Rate": "^TNX", "KR_Rate": "KR10YT=RR", "Oil": "CL=F", "Dollar": "DX-Y.NYB", "VIX": "^VIX", "SP500": "^GSPC", "KOSPI": "^KS11"}
     macro_res = {}
     for k, t in macros.items():
@@ -52,26 +66,26 @@ def load_all_market_intelligence(ticker):
         macro_res[k] = d['Close']
     return df.dropna(subset=['MA240']), macro_res
 
-# --- 데이터 준비 ---
-indices = {"NASDAQ Composite (나스닥 종합)": "^IXIC", "NASDAQ 100 (나스닥 100)": "^NDX", "S&P 500 (에스앤피 500)": "^GSPC", "KOSPI (코스피)": "^KS11", "KOSDAQ (코스닥)": "^KQ11"}
-choice = st.sidebar.radio("📋 분석 지수 선택 (Asset Selection)", list(indices.keys()))
+# --- 데이터 로드 ---
+indices = {"NASDAQ Composite": "^IXIC", "NASDAQ 100": "^NDX", "S&P 500": "^GSPC", "KOSPI": "^KS11", "KOSDAQ": "^KQ11"}
+choice = st.sidebar.radio("📋 분석 대상 선택", list(indices.keys()))
 data, appendix_data = load_all_market_intelligence(indices[choice])
 
 last = data.iloc[-1]
 curr, ma60, ma120, rsi = float(last['Close']), float(last['MA60']), float(last['MA120']), float(last['RSI'])
 disp_120 = (curr / ma120) * 100
 
-# 3. 버핏 지수 전용 계산
+# 3. 버핏 지수 전용 계산 (US & KR)
 def calc_global_buffett(sp_val, ks_val):
     us_ratio = (sp_val * 9.5 / 1000 / 28.5) * 100
     kr_ratio = (ks_val * 0.83 / 2450) * 100
-    us_stat = "고평가(과열)" if us_ratio > 170 else ("저평가(기회)" if us_ratio < 110 else "적정 가치")
-    kr_stat = "고평가(과열)" if kr_ratio > 110 else ("저평가(기회)" if kr_ratio < 75 else "적정 가치")
+    us_stat = "고평가(주의)" if us_ratio > 170 else ("저평가(기회)" if us_ratio < 110 else "적정 가치")
+    kr_stat = "고평가(주의)" if kr_ratio > 110 else ("저평가(기회)" if kr_ratio < 75 else "적정 가치")
     return (us_ratio, us_stat), (kr_ratio, kr_stat)
 
 (us_buff, us_stat), (kr_buff, kr_stat) = calc_global_buffett(appendix_data['SP500'].iloc[-1], appendix_data['KOSPI'].iloc[-1])
 
-# 4. 상단 섹션: AI Investment Verdict (AI 투자 의견)
+# 4. 상단 섹션: AI Investment Verdict & Date Badge
 score = 0
 if ma60 > ma120: score += 2
 if rsi < 40: score += 2
@@ -84,22 +98,27 @@ elif score <= -1: verdict, v_class = "부정 (Caution / 현금 비중 확대)", 
 else: verdict, v_class = "중립 (Neutral / 신중한 관망)", "neutral-v"
 
 st.title(f"📊 {choice} 전략 보고서")
-st.markdown(f'''<div class="verdict-box {v_class}"><div style="font-size:12px; font-weight:700; opacity:0.7;">AI EXECUTIVE VERDICT (최종 투자 의견)</div><div class="v-content">{verdict}</div></div>''', unsafe_allow_html=True)
+st.markdown(f'''
+    <div class="verdict-box {v_class}">
+        <div class="date-badge">기준 날짜: {today_str}</div>
+        <div style="font-size:12px; font-weight:700; opacity:0.7;">AI EXECUTIVE VERDICT (최종 투자 의견)</div>
+        <div class="v-content">{verdict}</div>
+    </div>
+''', unsafe_allow_html=True)
 
 # 5. 중단 섹션: 지표 카드 (한글 병기 및 수치 해석)
 st.subheader("🔍 핵심 지표 진단 (Strategic Diagnosis)")
 c1, c2, c3 = st.columns(3)
-
 with c1:
     trend_status = "상승 정배열" if ma60 > ma120 else "하락 역배열"
     st.markdown(f'''<div class="info-card"><div class="card-title">Trend - 이평선 추이</div><div class="card-val">{trend_status}</div>
-    <div class="card-analysis"><b>해석:</b> 60일선이 120일선 위에 있는 {trend_status} 상태입니다. 시장의 기초 체력이 {'강력하여 상승세가 지속될' if ma60 > ma120 else '약화되어 추가 하락 위험이 있는'} 구간입니다.</div></div>''', unsafe_allow_html=True)
+    <div class="card-analysis"><b>해석:</b> 현재 60일선이 120일선 {"위에" if ma60 > ma120 else "아래에"} 있는 {trend_status} 상태입니다. 시장의 기초 체력이 {"상승세를 지지하고" if ma60 > ma120 else "약화되어 주의가 필요한"} 구간입니다.</div></div>''', unsafe_allow_html=True)
 with c2:
-    st.markdown(f'''<div class="info-card"><div class="card-title">Mean Reversion - 평균 회귀(이격도)</div><div class="card-val">{disp_120:.1f}%</div>
-    <div class="card-analysis"><b>해석:</b> 120일 평균 가격 대비 현재 주가 위치입니다. {'110% 이상으로 과열되어 단기 조정이 우려됩니다.' if disp_120 > 110 else ('90% 이하로 과하게 떨어져 반등 기회가 보입니다.' if disp_120 < 90 else '평균선 근처에서 안정적인 흐름을 보이고 있습니다.')}</div></div>''', unsafe_allow_html=True)
+    st.markdown(f'''<div class="info-card"><div class="card-title">Mean Reversion - 이격도</div><div class="card-val">{disp_120:.1f}%</div>
+    <div class="card-analysis"><b>해석:</b> 120일 평균선 대비 위치입니다. {"110% 이상으로 고평가되어 조정이 우려됩니다." if disp_120 > 110 else ("90% 이하로 저평가되어 반등이 기대됩니다." if disp_120 < 90 else "평균선 근처에서 안정적인 흐름입니다.")}</div></div>''', unsafe_allow_html=True)
 with c3:
     st.markdown(f'''<div class="info-card"><div class="card-title">Sentiment - 심리 지수(RSI)</div><div class="card-val">{rsi:.1f}</div>
-    <div class="card-analysis"><b>해석:</b> 투자자들의 심리적 과열도입니다. 현재 {rsi:.1f}로 {'다들 너무 흥분한 과매수 상태(탐욕)' if rsi > 70 else ('다들 너무 겁먹은 과매도 상태(공포)' if rsi < 30 else '매수/매도세가 균형을 이룬 중립')} 구간입니다.</div></div>''', unsafe_allow_html=True)
+    <div class="card-analysis"><b>해석:</b> 투자자 심리입니다. 현재 {rsi:.1f}로 {"과매수(탐욕) 상태로 조정 주의가 필요합니다." if rsi > 70 else ("과매도(공포) 상태로 매수 기회를 검토하세요." if rsi < 30 else "매수/매도가 균형을 이룬 중립 상태입니다.")}</div></div>''', unsafe_allow_html=True)
 
 # 6. 차트 영역: 8단계 기간 탭 및 수익률(CAGR)
 st.markdown("---")
@@ -111,7 +130,7 @@ def render_analysis_chart(df_sub, p_name):
     start_p, end_p = float(df_sub['Close'].iloc[0]), float(df_sub['Close'].iloc[-1])
     ret = ((end_p - start_p) / start_p) * 100
     days = (df_sub.index[-1] - df_sub.index[0]).days
-    cagr = (((end_p / start_p) ** (365 / days)) - 1) * 100 if days > 0 else 0
+    cagr = (((end_p / start_p) ** (365 / (days if days > 0 else 1))) - 1) * 100
     
     col_m1, col_m2 = st.columns(2)
     col_m1.metric(f"{p_name} 실질 수익률", f"{ret:.2f}%")
@@ -132,9 +151,9 @@ def render_analysis_chart(df_sub, p_name):
     st.plotly_chart(fig, use_container_width=True, config={'scrollZoom': True, 'displayModeBar': False})
 
 for i, (name, d) in enumerate(days_map.items()):
-    with tabs[i]: render_analysis_chart(data.iloc[-d:], name)
+    with tabs[i]: render_performance_chart = render_analysis_chart(data.iloc[-d:], name)
 
-# 7. 하단 부록: Buffett Index & Macro Pulse
+# 7. 하단 부록: Global Macro & Buffett Index
 st.markdown('<div class="macro-section"><h2>📎 부록: 글로벌 매크로 및 밸류에이션 분석 (Appendix)</h2>', unsafe_allow_html=True)
 
 st.markdown('<div class="buffett-appendix">', unsafe_allow_html=True)
@@ -142,10 +161,10 @@ st.markdown("### 🏛️ Buffett Index - 국가별 버핏 지수 (시총/GDP)")
 b_col1, b_col2 = st.columns(2)
 with b_col1:
     st.markdown(f"**미국 (US Market)**: <span style='font-size:28px;'>{us_buff:.1f}%</span> (상태: **{us_stat}**)", unsafe_allow_html=True)
-    st.caption("설명: GDP 대비 주식 가치. 150% 이상은 역사적 고평가 구간입니다.")
+    st.caption("설명: GDP 대비 주식 비중. 170% 이상 시 역사적 고평가(버블)를 경고합니다.")
 with b_col2:
     st.markdown(f"**한국 (KR Market)**: <span style='font-size:28px;'>{kr_buff:.1f}%</span> (상태: **{kr_stat}**)", unsafe_allow_html=True)
-    st.caption("설명: 한국 시장은 보통 70~100% 사이에서 움직입니다.")
+    st.caption("설명: 한국 시장은 보통 75~100% 사이에서 박스권을 형성합니다.")
 st.markdown('</div>', unsafe_allow_html=True)
 
 st.markdown("---")
@@ -154,10 +173,10 @@ m1, m2 = st.columns(2); m3, m4 = st.columns(2)
 def get_macro_situation(name, series):
     curr_v, prev_v = series.iloc[-1], series.iloc[-22]
     diff = curr_v - prev_v
-    if name == "US_Rate": return f"미 10년물 금리 {curr_v:.2f}% ({diff:+.2f}%). 금리 상승은 기술주 등 성장주 가격에 부정적입니다."
-    elif name == "Oil": return f"WTI 유가 ${curr_v:.2f}. 유가 상승은 물가 상승을 유발하여 금리 인하를 늦춥니다."
-    elif name == "Dollar": return f"달러 인덱스 {curr_v:.2f}. 달러가 강해지면 외국인들이 한국 주식을 팔고 나갈 가능성이 큽니다."
-    else: return f"VIX(공포지수) {curr_v:.2f}. 20 이하가 안정적이며, 갑자기 솟구치면 시장 패닉을 의미합니다."
+    if name == "US_Rate": return f"미 10년물 금리 {curr_v:.2f}% ({diff:+.2f}%). 금리 상승 시 기업 할인율이 높아져 주가에 하방 압력을 줍니다."
+    elif name == "Oil": return f"WTI 유가 ${curr_v:.2f}. 고유가는 물가 상승을 자극하여 금리 인하 시점을 늦추는 요인이 됩니다."
+    elif name == "Dollar": return f"달러 인덱스 {curr_v:.2f}. 달러 강세 시 외국인 자금 이탈로 국내 증시의 탄력이 줄어듭니다."
+    else: return f"VIX(공포지수) {curr_v:.2f}. 20 이하 안정적이나, 최근 {diff:+.2f}포인트 변화하며 시장 심리를 반영 중입니다."
 
 def render_macro_appendix(series, title, color, m_name):
     fig = go.Figure(go.Scatter(x=series.index[-250:], y=series.values[-250:], mode='lines', line=dict(color=color, width=2.5)))
@@ -167,33 +186,29 @@ def render_macro_appendix(series, title, color, m_name):
 
 with m1: render_macro_appendix(appendix_data['US_Rate'], "US 10Y Yield (미 국채 금리)", "#ff6b6b", "US_Rate")
 with m2: render_macro_appendix(appendix_data['Oil'], "WTI Crude Oil (서부 텍사스산 원유)", "#adb5bd", "Oil")
-with m3: render_macro_appendix(appendix_data['Dollar'], "Dollar Index (달러 가치)", "#4dadf7", "Dollar")
+with m3: render_macro_appendix(appendix_data['Dollar'], "Dollar Index (달러 인덱스)", "#4dadf7", "Dollar")
 with m4: render_macro_appendix(appendix_data['VIX'], "VIX (공포 지수)", "#fab005", "VIX")
 st.markdown('</div>', unsafe_allow_html=True)
 
-# 8. 초보자를 위한 마스터 가이드 (통합 가이드)
+# 8. 초보자를 위한 통합 마스터 가이드
 st.markdown("---")
-with st.expander("🐣 **초보자 통합 가이드: 이 대시보드 200% 활용하는 법 (클릭하세요)**"):
+with st.expander("🐣 **초보자 통합 가이드: 대시보드 지표 마스터하기 (클릭)**"):
     st.markdown("""
-    ### 1. 지수 추세 (Trend) 보는 법
-    - **정배열:** 단기선이 장기선보다 위에 있음. 시장이 상승하는 중이니 주가가 떨어질 때마다 매수하기 좋습니다.
-    - **역배열:** 장기선이 단기선보다 위에 있음. 시장이 하락하는 중이니 보수적으로 대응해야 합니다.
+    ### 1. 지수 추세 (Trend) - '달리는 말인가?'
+    - **정배열:** 단기선이 장기선보다 위. 추세가 살아있어 '떨어지면 매수'가 유리합니다.
+    - **역배열:** 단기선이 장기선보다 아래. 추세가 꺾여 '오르면 매도'가 유리합니다.
     
 
-    ### 2. 이격도 (Mean Reversion) 보는 법
-    - **110% 이상:** 주가가 너무 비싸졌습니다. 조만간 평균으로 돌아가기 위해 떨어질 확률이 높습니다.
-    - **90% 이하:** 주가가 너무 싸졌습니다. 조만간 평균으로 돌아가기 위해 오를 확률이 높습니다.
+    ### 2. 이격도 (Mean Reversion) - '집에서 얼마나 멀어졌나?'
+    - 주가는 결국 120일선(평균선)으로 돌아오려는 성질이 있습니다. 110%를 넘으면 너무 비싼 고점, 90% 아래면 너무 싼 바닥일 확률이 높습니다.
     
 
-    ### 3. 심리 지수 (RSI) 보는 법
-    - **70 이상:** 시장 참여자들이 너무 흥분했습니다(탐욕). 이때는 남들이 살 때 파는 용기가 필요합니다.
-    - **30 이하:** 시장 참여자들이 너무 겁먹었습니다(공포). 이때는 남들이 팔 때 사는 용기가 필요합니다.
+    ### 3. 심리 지수 (RSI) - '과열인가 공포인가?'
+    - **70 이상:** 다들 환호할 때(탐욕). 이때는 조심해야 합니다.
+    - **30 이하:** 다들 도망갈 때(공포). 이때가 좋은 매수 기회일 수 있습니다.
     
 
-    ### 4. 연평균 수익률 (CAGR)이란?
-    - 단순히 총 수익률을 보는 게 아니라, '매년 평균적으로 몇 % 성장했는가'를 보여줍니다. 복리 효과를 계산할 때 가장 중요한 지표입니다.
-
-    ### 5. 버핏 지수 (Buffett Index)란?
-    - 국가의 GDP 대비 주식 시장의 시가총액이 얼마인지를 봅니다. 시장이 역사적으로 저렴한지 비싼지를 판단하는 '거인의 지표'입니다.
+    ### 4. 버핏 지수 (Buffett Index) - '시장 전체가 싼가 비싼가?'
+    - 시가총액을 GDP와 비교합니다. 주식 가격뿐만 아니라 경제 전체 크기 대비 거품이 끼었는지 판단하는 장기 지표입니다.
     
     """)
